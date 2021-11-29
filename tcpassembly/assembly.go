@@ -333,6 +333,7 @@ const assemblerReturnValueInitialSize = 16
 // see DefaultAssemblerOptions for details.
 func NewAssembler(pool *StreamPool) *Assembler {
 	pool.mu.Lock()
+	fmt.Println("Creating new assembler")
 	pool.users++
 	pool.mu.Unlock()
 	return &Assembler{
