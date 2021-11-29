@@ -21,11 +21,12 @@ package tcpassembly
 import (
 	"flag"
 	"fmt"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 var memLog = flag.Bool("assembly_memuse_log", false, "If true, the github.com/google/gopacket/tcpassembly library will log information regarding its memory use every once in a while.")
@@ -101,10 +102,8 @@ type page struct {
 // pageCache is a concurrency-unsafe store of page objects we use to avoid
 // memory allocation as much as we can.  It grows but never shrinks.
 type pageCache struct {
-	free         []*page
-	pcSize       int
-	size, used   int
-	pages        [][]page
+	pagePool     *sync.Pool
+	used         int
 	pageRequests int64
 }
 
@@ -112,25 +111,11 @@ const initialAllocSize = 1024
 
 func newPageCache() *pageCache {
 	pc := &pageCache{
-		free:   make([]*page, 0, initialAllocSize),
-		pcSize: initialAllocSize,
-	}
-	pc.grow()
-	return pc
-}
+		pagePool: &sync.Pool{
+			New: func() interface{} { return new(page) },
+		}}
 
-// grow exponentially increases the size of our page cache as much as necessary.
-func (c *pageCache) grow() {
-	pages := make([]page, c.pcSize)
-	c.pages = append(c.pages, pages)
-	c.size += c.pcSize
-	for i := range pages {
-		c.free = append(c.free, &pages[i])
-	}
-	if *memLog {
-		log.Println("PageCache: created", c.pcSize, "new pages")
-	}
-	c.pcSize *= 2
+	return pc
 }
 
 // next returns a clean, ready-to-use page object.
@@ -138,14 +123,12 @@ func (c *pageCache) next(ts time.Time) (p *page) {
 	if *memLog {
 		c.pageRequests++
 		if c.pageRequests&0xFFFF == 0 {
-			log.Println("PageCache:", c.pageRequests, "requested,", c.used, "used,", len(c.free), "free")
+			log.Println("PageCache:", c.pageRequests, "requested,", c.used, "used,")
 		}
 	}
-	if len(c.free) == 0 {
-		c.grow()
-	}
-	i := len(c.free) - 1
-	p, c.free = c.free[i], c.free[:i]
+
+	p = c.pagePool.Get().(*page)
+
 	p.prev = nil
 	p.next = nil
 	p.Reassembly = Reassembly{Bytes: p.buf[:0], Seen: ts}
@@ -156,7 +139,7 @@ func (c *pageCache) next(ts time.Time) (p *page) {
 // replace replaces a page into the pageCache.
 func (c *pageCache) replace(p *page) {
 	c.used--
-	c.free = append(c.free, p)
+	c.pagePool.Put(p)
 }
 
 // Stream is implemented by the caller to handle incoming reassembled
