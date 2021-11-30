@@ -34,6 +34,7 @@ var debugLog = flag.Bool("assembly_debug_log", false, "If true, the github.com/g
 
 const invalidSequence = -1
 const uint32Size = 1 << 32
+const IsForkVersion = true
 
 // Sequence is a TCP sequence number.  It provides a few convenience functions
 // for handling TCP wrap-around.  The sequence should always be in the range
