@@ -486,11 +486,11 @@ func (p *StreamPool) getConnection(k key, end bool, ts time.Time) *connection {
 	}
 	s := p.factory.New(k[0], k[1])
 	p.mu.Lock()
-	conn = p.newConnection(k, s, ts)
 	if conn2 := p.conns[k]; conn2 != nil {
 		p.mu.Unlock()
 		return conn2
 	}
+	conn = p.newConnection(k, s, ts)
 	p.conns[k] = conn
 	p.mu.Unlock()
 	return conn
